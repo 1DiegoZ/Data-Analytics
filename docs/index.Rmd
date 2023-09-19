@@ -1,0 +1,240 @@
+---
+title: "How Does a Bike-Share Navigate Speedy Success?"
+author: "Juan Diego Avila"
+date: "2023-09-01"
+output: html_document
+---
+
+## Introduction
+
+Over the last few months, I have been undergoing the Google Data Analytics Professional Certificate through Coursera. This is my final capstone project for this course wherein I will be using the skills and tools I learned during the certification course in order to analyze the data of the fictional company **Cyclistic**.
+
+To achieve my goal, I will follow the following data analysis steps: **Ask, Prepare, Process, Analyze, and Act**.
+
+### About the Company
+
+In 2016, Cyclistic launched a successful bike-share offering. Since then, the program has grown to a fleet of 5,824 bicycles that are geotracked and locked into a network of 692 stations across Chicago. The bikes can be unlocked from one station and returned to any other station in the system anytime.
+
+Cyclistic offers a variety of offers including: single-ride passes, full-day passes, and annual memberships. Customers who purchase a single-ride or full-day passes are referred to as casual riders. Customers who purchase annual memberships are Cyclistic members.
+
+### Ask
+
+#### Guiding Question
+
+The guiding question for this case study is: **How do annual members and casual riders use Cyclistic bikes differently?**
+
+
+#### Objective
+
+Design marketing strategies aimed at converting casual riders into annual members.
+
+
+#### Our stakeholders
+
+* **Lily Moreno:** Director of marketing, responsible for the development of campaigns and initiatives to promote the bike-share program.
+
+* **Cyclistic executive team:** In charge of the final decision, they will decide if the recommended marketing strategy is approved.
+
+
+### Prepare
+
+#### Prepare Data
+
+We have access to a primary [data source](https://divvy-tripdata.s3.amazonaws.com/index.html) licensed under Motivate International Inc. The dataset contains quantitative measurements collected from the bike trackers.
+
+To conduct a thorough analysis, I retrieved data from the previous 12 months (from August 2022 to July 2023) and uploaded them to RStudio.
+
+![Bike Trip Data from Aug 2022 to Jul 2023](1/Screenshots/Uploaded Data.PNG)
+
+#### Data Columns
+
+The dataset contains the following columns:
+
+1. **ride_id** - Unique identifier of each ride
+2. **rideable_type** - Type of bike used: standard two-wheel bike, reclining bike, hand tricycle, or cargo bike
+3. **started_at** - Start date and time of the trip
+4. **ended_at** - End date and time of the trip
+5. **start_station_name** - Name of station where trip started
+6. **start_station_id** - Unique identification code of the starting station
+7. **end_station_name** - Name of station where trip ended
+8. **end_station_id** - Unique identification code of the end station
+9. **start_lat** - Latitudinal coordinate of where trip started
+10. **start_lng** - Longitudinal coordinate of where trip started
+11. **end_lat** - Latitudinal coordinate of where trip ended
+12. **end_lng** - Longitudinal coordinate of where trip ended
+13. **member_casual** - Customer type if member of casual
+
+### Process
+
+#### Processing the Data
+
+Installing and loading the required packages    
+
+```{r Install_Packages}
+install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+install.packages("lubridate", repos = "http://cran.us.r-project.org")
+install.packages("janitor", repos = "http://cran.us.r-project.org")
+install.packages("dplyr", repos = "http://cran.us.r-project.org")
+install.packages("tidyr", repos = "http://cran.us.r-project.org")
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+```
+
+```{r Load_Libraries}
+library(tidyverse) 
+library(lubridate)
+library(janitor)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+
+Read each csv file then combine them into one data frame
+
+```{r Read_CSV_Files}
+df2208 <- read.csv("1/Data/202208-divvy-tripdata.csv")
+df2209 <- read.csv("1/Data/202209-divvy-tripdata.csv")
+df2210 <- read.csv("1/Data/202210-divvy-tripdata.csv")
+df2211 <- read.csv("1/Data/202211-divvy-tripdata.csv")
+df2212 <- read.csv("1/Data/202212-divvy-tripdata.csv")
+df2301 <- read.csv("1/Data/202301-divvy-tripdata.csv")
+df2302 <- read.csv("1/Data/202302-divvy-tripdata.csv")
+df2303 <- read.csv("1/Data/202303-divvy-tripdata.csv")
+df2304 <- read.csv("1/Data/202304-divvy-tripdata.csv")
+df2305 <- read.csv("1/Data/202305-divvy-tripdata.csv")
+df2306 <- read.csv("1/Data/202306-divvy-tripdata.csv")
+df2307 <- read.csv("1/Data/202307-divvy-tripdata.csv")
+```
+
+
+```{r Combine_Data_Frames}
+bikedf <- rbind(df2208,df2209,df2210,df2211,df2212,df2301,df2302,df2303,df2304,df2305,df2306,df2307)
+nrow(bikedf) #Number of rows in the Data Frame
+```
+
+Remove empty columns and rows using janitor library
+
+```{r Remove_Empty_Cols_and_Rows}
+bikedf <- remove_empty(dat = bikedf, which = c("rows", "cols"))
+nrow(bikedf) #Check if there are deleted rows
+head(bikedf)
+```
+
+Create new column for the trip duration then convert to numeric so we can perform calculations.
+
+```{r Calculate_Trip_Duration}
+bikedf$trip_duration <- difftime(bikedf$ended_at,bikedf$started_at)
+bikedf$trip_duration <- as.numeric(as.character(bikedf$trip_duration))
+summary(bikedf)
+```
+Next, we remove bad data, or we include only those with trip duration greater than 0.
+
+```{r Remove_Bad_Data}
+bikedf_2 <- bikedf[bikedf$trip_duration > 0, ]
+dim(bikedf)
+dim(bikedf_2) #Check the number of rows after removing bad data
+```
+We will also check if there are duplicates and delete them if there are any.
+
+```{r Check_Duplicates}
+any(duplicated(bikedf_2$ride_id)) #returns TRUE if there are any duplicates and FALSE if otherwise
+```
+
+Since there are no duplicates, there is no need to delete them.
+
+Next step, we will create additional columns for Date, Month, Year, and Day of the week so we could use them for analysis.
+
+```{r Create_Date_Columns}
+bikedf_2$start_date <- as.Date(bikedf_2$started_at)
+bikedf_2$start_month <- format(as.Date(bikedf_2$start_date), "%mVi")
+bikedf_2$start_day <- format(as.Date(bikedf_2$start_date), "%d")
+bikedf_2$start_year <- format(as.Date(bikedf_2$start_date), "%Y")
+bikedf_2$start_day_week <- format(as.Date(bikedf_2$start_date), "%A")
+```
+
+After cleaning and formatting the data, we will now create a new CSV so we could continue with the analysis in Tableau.
+
+```{r Create_CSV}
+write.csv(bikedf_2, "Cyclistic_Subset-06-09-2023.csv")
+```
+
+### Analysis
+
+We will check the summary of the trip duration.
+
+```{r Trip_Duration_Summary}
+summary(bikedf_2$trip_duration)
+```
+
+We will also compare the mean, median, max, and min trip duration for member and casual riders.
+
+```{r Compare_Member_Casual}
+aggregate(bikedf_2$trip_duration ~ bikedf_2$member_casual, FUN = mean) #Compare mean
+aggregate(bikedf_2$trip_duration ~ bikedf_2$member_casual, FUN = median) #Compare median
+aggregate(bikedf_2$trip_duration ~ bikedf_2$member_casual, FUN = max) #Compare max
+aggregate(bikedf_2$trip_duration ~ bikedf_2$member_casual, FUN = min) #Compare min
+```
+
+As we can observe, casual riders have longer mean and median trip duration compared to member riders.
+
+```{r}
+# Order by day of week
+bikedf_2$start_day_week <- ordered(bikedf_2$start_day_week, 
+                                       levels=c("Sunday", "Monday", "Tuesday", 
+                                                "Wednesday", "Thursday", "Friday", 
+                                                "Saturday"))
+
+bikedf_2 %>% 
+  group_by(member_casual, start_day_week) %>%  #group by rider type and by day of the week
+  summarise(number_of_rides = n() #calculates the total number of rides
+            ,average_trip_duration = mean(trip_duration)) %>% # calculates the average trip duration
+  arrange(start_day_week, member_casual) # sorts by day of the week then by rider type
+```
+
+As we can observe in the above table, members use bikes more than casual riders. However, casual riders use the bikes longer than the member riders on average. We can also observe than casual riders use bikes more during Fridays and during the weekends.
+
+#### Comparing Casual and Member Riders
+
+![](1/Screenshots/Pie Chart of Rider Types.PNG)
+
+As we can see in the above pie chart, 37.9% of the riders in the data are casual riders, while 62.1% are member riders.
+
+![](1/Screenshots/Bike Type.PNG)
+
+We can see in the above graph that both casual and member riders prefer classic and electric bikes over docked bikes with member riders not using the docked bikes.
+
+![](1/Screenshots/Total Per Day.PNG)
+
+Member riders use bikes more during the weekdays. However, casual riders use bikes more during Fridays and weekends.
+
+![](1/Screenshots/Average Trip Duration Per Day.PNG)
+
+We can see however, that casual riders ride longer compared to member riders.
+
+![](1/Screenshots/Total Per Month.PNG)
+
+For both rider types, we can see a similar trend where the number of rides peak from the month of June to September and that there are less number of rides for the rest of the year.
+
+![](1/Screenshots/Average Trip Duration Per Month.PNG)
+
+There is also a similar trend to the average trip duration for both casual and member riders. However, casual riders use the bikes longer compared to member riders. Casual riders also ride the longest during the month of July.
+
+![](1/Screenshots/Top Start Stations - Casual Riders.PNG)
+![](1/Screenshots/Top End Stations - Casual Riders.PNG)
+
+In the above images, we can see the top ten start and end stations for casual riders. The common stations for both start and end stations are the following:
+
+* Streeter Dr & Grand Ave
+* DuSable Lake Shore Dr & Monroe St
+* Millenium Park
+* Michigan Ave & Oak St
+* Shedd Aquarium
+* Adler Planetarium
+
+We can use this information to set where to focus the advertisements.
+
+### Act
+
+1. Casual riders use the bikes more during Fridays and weekends so it will be best to focus marketing during those days. There are also more casual riders from June up to September, so those will be good months to do promotions.
+2. Marketing may also be focused on the top 10 start and end stations so more casual riders will be able to see the promotions. We can also focus only on the 6 common start and end stations.
+3. We can also provide offers and discounts to casual riders when they upgrade to members during peak days and/or months.
